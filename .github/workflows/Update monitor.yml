@@ -1,35 +1,39 @@
-name: Update monitor
+name: Update Monitor
 
 on:
   schedule:
-    - cron: '0 */6 * * *' # 每6小時執行一次
-  workflow_dispatch:      # 允許手動執行
+    - cron: '0 */6 * * *' # Runs every 6 hours
+  workflow_dispatch:      # Allows you to click a button to run it manually
+
+permissions:
+  contents: write         # Gives permission to save the file back to the repo
 
 jobs:
-  build:
+  update-data:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        # 這裡加入了必要的套件安裝指令
-        pip install googlesearch-python requests beautifulsoup4 lxml
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    - name: Run URL Finder (Generate Config)
-      run: python url_finder.py
+      - name: Run Monitor Script
+        run: python monitor.py
+        # This runs your script which generates dashboard_data.json
 
-    - name: Run Monitor Script
-      run: python monitor.py
-      env:
-        # 如果你有設定 LINE 通知，請保留這行，沒有的話可以忽略
-        LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
+      - name: Commit and Push Data
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add dashboard_data.json
+          git commit -m "Auto-update dashboard data" || echo "No changes to commit"
+          git push
