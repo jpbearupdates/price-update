@@ -48,7 +48,7 @@ def main():
             # 標記這是 Client 還是 Competitor
             role = "client" if plat == platforms['client'] else "competitor"
             
-            item_entry["urls"][plat] = {
+           item_entry["urls"][plat['id']] = {
                 "url": url,
                 "role": role
             }
