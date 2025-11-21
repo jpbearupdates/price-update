@@ -1,44 +1,35 @@
-name: Daily Price Monitor
+name: Update monitor
 
-# 設定觸發條件
 on:
   schedule:
-    # 每 4 小時執行一次 (UTC 時間，對應香港時間約 +8)
-    - cron: '0 */4 * * *'
-  workflow_dispatch: # 允許手動點擊按鈕觸發
-
-permissions:
-  contents: write # 允許 Action 修改並上傳檔案 (重要！)
+    - cron: '0 */6 * * *' # 每6小時執行一次
+  workflow_dispatch:      # 允許手動執行
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    # 1. 下載你的代碼庫
     - name: Checkout code
       uses: actions/checkout@v3
 
-    # 2. 設定 Python 環境
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.9'
 
-    # 3. 安裝依賴庫
     - name: Install dependencies
       run: |
-        pip install -r requirements.txt
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    # 4. 執行爬蟲腳本
+    # --- 新增這個步驟 ---
+    - name: Run URL Finder (Generate Config)
+      run: python url_finder.py
+    # ------------------
+
     - name: Run Monitor Script
       run: python monitor.py
-
-    # 5. 將更新後的 dashboard_data.json 推送回倉庫
-    - name: Commit and push changes
-      run: |
-        git config --global user.name 'github-actions[bot]'
-        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-        git add dashboard_data.json
-        # 只有當檔案有變動時才 Commit，避免報錯
-        git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update dashboard data" && git push)
+      env:
+        # 如果你的程式碼需要 LINE Token，記得要在這裡設定
+        LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
