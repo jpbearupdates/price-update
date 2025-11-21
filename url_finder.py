@@ -21,18 +21,15 @@ def load_platforms():
         print("Error: platforms.json not found.")
         return {}
 
-# 搜尋邏輯 (改用 DuckDuckGo)
+# 搜尋邏輯 (DuckDuckGo)
 def find_product_url(product_name, platform_domain):
     query = f"{product_name} site:{platform_domain}"
     print(f"🔍 Searching on DDG: {query}")
     
     try:
         # 使用 DuckDuckGo 搜尋
-        # max_results=1 代表只拿第一個結果
         results = DDGS().text(query, max_results=1)
         
-        # DDGS 回傳的是一個 List of Dictionaries
-        # 格式類似: [{'title': '...', 'href': 'https://...', 'body': '...'}]
         if results:
             first_result = results[0]
             url = first_result.get('href')
@@ -55,17 +52,43 @@ def main():
         print("No products to search.")
         return
 
+    if not platforms:
+        print("No platforms config found.")
+        return
+
+    # --- 修正重點開始 ---
+    # 判斷 platforms 是 List 還是 Dict，統一轉換成 List 進行迴圈
+    # 這樣無論你的 JSON 是 [{}, {}] 還是 {"p1": {}, "p2": {}} 都能跑
+    if isinstance(platforms, dict):
+        platform_list = list(platforms.values())
+    elif isinstance(platforms, list):
+        platform_list = platforms
+    else:
+        print("Error: platforms.json format is not recognized (must be list or dict).")
+        return
+    # --- 修正重點結束 ---
+
     # 迴圈遍歷每個產品
     for product in products:
         sku = product.get('sku')
         name = product.get('name')
         
-        # 迴圈遍歷每個平台 (Client, Comp1, Comp2...)
-        for key, platform_info in platforms.items():
+        print(f"\n--- Processing Product: {name} ---")
+
+        # 迴圈遍歷每個平台
+        for platform_info in platform_list:
+            
+            # --- 安全檢查 ---
+            # 確保 platform_info 是字典，如果它是 List (例如 ["Fortress", "..."])，這裡會跳過並警告
+            if not isinstance(platform_info, dict):
+                print(f"⚠️ Skipping invalid platform format (expected dict, got {type(platform_info).__name__}): {platform_info}")
+                continue
+            
             domain = platform_info.get('domain')
             platform_name = platform_info.get('name')
             
             if not domain:
+                print(f"⚠️ Skipping platform with no domain: {platform_name}")
                 continue
 
             # 執行搜尋
@@ -83,14 +106,14 @@ def main():
                 }
                 results.append(entry)
             
-            # 休息一下，避免被封鎖 (DuckDuckGo 雖然寬鬆，但太快都會封)
+            # 休息一下，避免被封鎖
             time.sleep(random.uniform(2, 5))
 
     # 儲存結果
     with open('generated_config.json', 'w', encoding='utf-8') as f:
         json.dump(results, f, indent=4, ensure_ascii=False)
     
-    print(f"🎉 Configuration generated with {len(results)} items! Check 'generated_config.json'.")
+    print(f"\n🎉 Configuration generated with {len(results)} items! Check 'generated_config.json'.")
 
 if __name__ == "__main__":
     main()
