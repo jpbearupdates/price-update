@@ -1,8 +1,14 @@
 [
-  "Dyson V12 Detect Slim Fluffy",
-  "Sony WH-1000XM5",
-  "iPhone 17 Pro",
-  "iPhone 17",
-  "Nintendo Switch OLED Model",
-  "Samsung Galaxy S24 Ultra"
+    {
+        "sku": "SKU_001",
+        "name": "Iphone 17"
+    },
+    {
+        "sku": "SKU_002",
+        "name": "Nintendo Switch OLED Model White"
+    },
+    {
+        "sku": "SKU_003",
+        "name": "Logitech MX Master 3S Mouse"
+    }
 ]
