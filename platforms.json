@@ -7,3 +7,24 @@
     "YOHO 友和"
   ]
 }
+
+[
+    {
+        "id": "client",
+        "name": "Fortress 豐澤",
+        "domain": "www.fortress.com.hk",
+        "type": "client"
+    },
+    {
+        "id": "comp1",
+        "name": "YOHO 友和",
+        "domain": "www.yohohongkong.com",
+        "type": "competitor"
+    },
+    {
+        "id": "comp2",
+        "name": "BestBuy",
+        "domain": "bestbuy.com",
+        "type": "competitor"
+    }
+]
