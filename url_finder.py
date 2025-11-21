@@ -1,72 +1,96 @@
 import json
 import time
 import random
-from googlesearch import search
+from duckduckgo_search import DDGS
 
+# 讀取輸入檔案
 def load_inputs():
-    with open('inputs.json', 'r', encoding='utf-8') as f:
-        skus = json.load(f)
-    with open('platforms.json', 'r', encoding='utf-8') as f:
-        platforms = json.load(f)
-    return skus, platforms
+    try:
+        with open('inputs.json', 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        print("Error: inputs.json not found.")
+        return []
 
-def find_url(sku, platform_name):
-    # 注意：如果 platform_name 是一個字典(dict)，這裡搜尋字串可能會變得很亂
-    # 建議確認傳進來的是單純的名稱字串
-    query = f"{sku} {platform_name}"
-    print(f"🔍 Searching: {query}...")
+# 讀取平台設定
+def load_platforms():
+    try:
+        with open('platforms.json', 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        print("Error: platforms.json not found.")
+        return {}
+
+# 搜尋邏輯 (改用 DuckDuckGo)
+def find_product_url(product_name, platform_domain):
+    query = f"{product_name} site:{platform_domain}"
+    print(f"🔍 Searching on DDG: {query}")
     
     try:
-        # 搜尋 Google，取第 1 個結果
-        # num_results=1 代表只抓第一條
-        results = list(search(query, num_results=1, advanced=True))
+        # 使用 DuckDuckGo 搜尋
+        # max_results=1 代表只拿第一個結果
+        results = DDGS().text(query, max_results=1)
+        
+        # DDGS 回傳的是一個 List of Dictionaries
+        # 格式類似: [{'title': '...', 'href': 'https://...', 'body': '...'}]
         if results:
-            url = results[0].url
-            print(f"   ✅ Found: {url}")
+            first_result = results[0]
+            url = first_result.get('href')
+            print(f"✅ Found: {url}")
             return url
+        else:
+            print(f"❌ No results found for {product_name} on {platform_domain}")
+            return None
+
     except Exception as e:
-        print(f"   ❌ Error: {e}")
-    
-    return ""
+        print(f"⚠️ Error searching for {product_name}: {e}")
+        return None
 
 def main():
-    skus, platforms = load_inputs()
-    full_config = []
+    products = load_inputs()
+    platforms = load_platforms()
+    results = []
 
-    all_platforms = [platforms['client']] + platforms['competitors']
+    if not products:
+        print("No products to search.")
+        return
 
-    for sku in skus:
-        item_entry = {
-            "sku_name": sku,
-            "urls": {}
-        }
+    # 迴圈遍歷每個產品
+    for product in products:
+        sku = product.get('sku')
+        name = product.get('name')
         
-        for plat in all_platforms:
-            # 為了避免被 Google Ban IP，每次搜尋隨機暫停 2-5 秒
-            time.sleep(random.uniform(2, 5)) 
+        # 迴圈遍歷每個平台 (Client, Comp1, Comp2...)
+        for key, platform_info in platforms.items():
+            domain = platform_info.get('domain')
+            platform_name = platform_info.get('name')
             
-            # 這裡傳入 plat (它是個字典)，搜尋時可能會有問題
-            # 如果搜尋結果不準，請將下一行改成 find_url(sku, plat['name']) (假設你的 json 有 name 欄位)
-            url = find_url(sku, plat)
-            
-            # 標記這是 Client 還是 Competitor
-            role = "client" if plat == platforms['client'] else "competitor"
-            
-            # --- 修正部分開始 ---
-            # 這裡原本縮排錯誤，現在已對齊
-            item_entry["urls"][plat['id']] = {
-                "url": url,
-                "role": role
-            }
-            # --- 修正部分結束 ---
-            
-        full_config.append(item_entry)
+            if not domain:
+                continue
 
-    # 輸出生成的 Config 檔案
+            # 執行搜尋
+            url = find_product_url(name, domain)
+            
+            if url:
+                # 成功搵到，加入結果
+                entry = {
+                    "sku": sku,
+                    "name": name,
+                    "platform": platform_name,
+                    "type": platform_info.get('type'), # client or competitor
+                    "url": url,
+                    "selector": platform_info.get('price_selector')
+                }
+                results.append(entry)
+            
+            # 休息一下，避免被封鎖 (DuckDuckGo 雖然寬鬆，但太快都會封)
+            time.sleep(random.uniform(2, 5))
+
+    # 儲存結果
     with open('generated_config.json', 'w', encoding='utf-8') as f:
-        json.dump(full_config, f, indent=2, ensure_ascii=False)
+        json.dump(results, f, indent=4, ensure_ascii=False)
     
-    print("\n🎉 Configuration generated! Check 'generated_config.json'.")
+    print(f"🎉 Configuration generated with {len(results)} items! Check 'generated_config.json'.")
 
 if __name__ == "__main__":
     main()
