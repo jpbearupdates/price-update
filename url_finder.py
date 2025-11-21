@@ -3,7 +3,6 @@ import time
 import random
 from duckduckgo_search import DDGS
 
-# 讀取輸入檔案
 def load_inputs():
     try:
         with open('inputs.json', 'r', encoding='utf-8') as f:
@@ -12,7 +11,6 @@ def load_inputs():
         print("Error: inputs.json not found.")
         return []
 
-# 讀取平台設定
 def load_platforms():
     try:
         with open('platforms.json', 'r', encoding='utf-8') as f:
@@ -21,33 +19,31 @@ def load_platforms():
         print("Error: platforms.json not found.")
         return {}
 
-# 遞迴攤平平台設定 (解決 JSON 裡面又有 List 的問題)
+# --- 修正後的攤平函數 ---
 def flatten_platforms(data):
     flat_list = []
-    if isinstance(data, dict):
-        # 如果是字典 (例如 {"client": {...}, "comp1": {...}})，取 values
-        for key, value in data.items():
-            flat_list.extend(flatten_platforms(value))
-    elif isinstance(data, list):
-        # 如果是列表，檢查裡面的元素
+    if isinstance(data, list):
+        # 如果是列表，遍歷裡面的每個項目
         for item in data:
             flat_list.extend(flatten_platforms(item))
-    else:
-        # 如果是單個設定物件 (已經是我們要的 dict)，直接加入
-        flat_list.append(data)
+    elif isinstance(data, dict):
+        # 關鍵修正：如果這個字典裡有 'domain'，代表它就是我們要的平台設定，不要再拆了！
+        if 'domain' in data:
+            flat_list.append(data)
+        else:
+            # 如果沒有 domain，可能只是分類標籤 (例如 "competitors": {...})，繼續往裡面找
+            for value in data.values():
+                flat_list.extend(flatten_platforms(value))
     return flat_list
 
-# 搜尋邏輯 (針對香港地區優化)
 def find_product_url(product_name, platform_domain):
-    # 移除 www. 前綴有時候能增加搜尋廣度，這裡先保留完整 domain
+    # 這裡保留上一版修正的 HTML backend 和 region 設定
     query = f"{product_name} site:{platform_domain}"
     print(f"🔍 Searching: {query}")
     
     try:
-        # --- 關鍵修正 ---
-        # region='hk-tzh': 強制搜尋香港繁體中文結果 (解決雲端 IP 找不到香港站的問題)
-        # backend='html': 使用 HTML 模式，比預設 API 模式更抗封鎖，適合 site: 指令
         with DDGS() as ddgs:
+            # 使用 html 模式和香港地區
             results = list(ddgs.text(query, region='hk-tzh', backend='html', max_results=1))
         
         if results:
@@ -56,7 +52,6 @@ def find_product_url(product_name, platform_domain):
             print(f"✅ Found: {url}")
             return url
         else:
-            # 如果 site: 找不到，嘗試放寬搜尋 (不強制 site: 但加上關鍵字)
             print(f"⚠️ Strict search failed, trying loose search...")
             loose_query = f"{product_name} {platform_domain}"
             with DDGS() as ddgs:
@@ -64,7 +59,6 @@ def find_product_url(product_name, platform_domain):
             
             if results:
                 url = results[0].get('href')
-                # 簡單檢查網址是否包含該 domain
                 if platform_domain in url:
                     print(f"✅ Found (Loose): {url}")
                     return url
@@ -89,31 +83,33 @@ def main():
         print("No platforms config found.")
         return
 
-    # 攤平平台設定，解決 "Skipping invalid platform format" 錯誤
+    # 處理平台列表
     platform_list = flatten_platforms(raw_platforms)
     print(f"ℹ️ Loaded {len(platform_list)} platforms to search.")
 
-    # 迴圈遍歷每個產品
+    # Debug: 印出第一個平台長什麼樣子，確保格式正確
+    if len(platform_list) > 0:
+        print(f"ℹ️ Debug - First platform data: {platform_list[0]}")
+
     for product in products:
         sku = product.get('sku')
         name = product.get('name')
         
         print(f"\n--- Processing Product: {name} ---")
 
-        # 迴圈遍歷每個平台
         for platform_info in platform_list:
-            
-            # 再次確認格式
+            # 這裡應該不會再被跳過了
             if not isinstance(platform_info, dict):
+                print(f"⚠️ Skipping invalid data type: {type(platform_info)}")
                 continue
             
             domain = platform_info.get('domain')
             platform_name = platform_info.get('name')
             
             if not domain:
+                print(f"⚠️ Skipping platform without domain: {platform_info}")
                 continue
 
-            # 執行搜尋
             url = find_product_url(name, domain)
             
             if url:
@@ -127,10 +123,8 @@ def main():
                 }
                 results.append(entry)
             
-            # 隨機休息 3-6 秒 (HTML backend 比較慢，建議休息久一點點)
             time.sleep(random.uniform(3, 6))
 
-    # 儲存結果
     with open('generated_config.json', 'w', encoding='utf-8') as f:
         json.dump(results, f, indent=4, ensure_ascii=False)
     
