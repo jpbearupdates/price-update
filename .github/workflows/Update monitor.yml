@@ -21,15 +21,15 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
+        # 這裡加入了必要的套件安裝指令
+        pip install googlesearch-python requests beautifulsoup4 lxml
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    # --- 新增這個步驟 ---
     - name: Run URL Finder (Generate Config)
       run: python url_finder.py
-    # ------------------
 
     - name: Run Monitor Script
       run: python monitor.py
       env:
-        # 如果你的程式碼需要 LINE Token，記得要在這裡設定
+        # 如果你有設定 LINE 通知，請保留這行，沒有的話可以忽略
         LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
