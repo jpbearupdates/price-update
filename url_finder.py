@@ -21,14 +21,34 @@ def load_platforms():
         print("Error: platforms.json not found.")
         return {}
 
-# 搜尋邏輯 (DuckDuckGo)
+# 遞迴攤平平台設定 (解決 JSON 裡面又有 List 的問題)
+def flatten_platforms(data):
+    flat_list = []
+    if isinstance(data, dict):
+        # 如果是字典 (例如 {"client": {...}, "comp1": {...}})，取 values
+        for key, value in data.items():
+            flat_list.extend(flatten_platforms(value))
+    elif isinstance(data, list):
+        # 如果是列表，檢查裡面的元素
+        for item in data:
+            flat_list.extend(flatten_platforms(item))
+    else:
+        # 如果是單個設定物件 (已經是我們要的 dict)，直接加入
+        flat_list.append(data)
+    return flat_list
+
+# 搜尋邏輯 (針對香港地區優化)
 def find_product_url(product_name, platform_domain):
+    # 移除 www. 前綴有時候能增加搜尋廣度，這裡先保留完整 domain
     query = f"{product_name} site:{platform_domain}"
-    print(f"🔍 Searching on DDG: {query}")
+    print(f"🔍 Searching: {query}")
     
     try:
-        # 使用 DuckDuckGo 搜尋
-        results = DDGS().text(query, max_results=1)
+        # --- 關鍵修正 ---
+        # region='hk-tzh': 強制搜尋香港繁體中文結果 (解決雲端 IP 找不到香港站的問題)
+        # backend='html': 使用 HTML 模式，比預設 API 模式更抗封鎖，適合 site: 指令
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, region='hk-tzh', backend='html', max_results=1))
         
         if results:
             first_result = results[0]
@@ -36,6 +56,19 @@ def find_product_url(product_name, platform_domain):
             print(f"✅ Found: {url}")
             return url
         else:
+            # 如果 site: 找不到，嘗試放寬搜尋 (不強制 site: 但加上關鍵字)
+            print(f"⚠️ Strict search failed, trying loose search...")
+            loose_query = f"{product_name} {platform_domain}"
+            with DDGS() as ddgs:
+                results = list(ddgs.text(loose_query, region='hk-tzh', backend='html', max_results=1))
+            
+            if results:
+                url = results[0].get('href')
+                # 簡單檢查網址是否包含該 domain
+                if platform_domain in url:
+                    print(f"✅ Found (Loose): {url}")
+                    return url
+            
             print(f"❌ No results found for {product_name} on {platform_domain}")
             return None
 
@@ -45,28 +78,20 @@ def find_product_url(product_name, platform_domain):
 
 def main():
     products = load_inputs()
-    platforms = load_platforms()
+    raw_platforms = load_platforms()
     results = []
 
     if not products:
         print("No products to search.")
         return
 
-    if not platforms:
+    if not raw_platforms:
         print("No platforms config found.")
         return
 
-    # --- 修正重點開始 ---
-    # 判斷 platforms 是 List 還是 Dict，統一轉換成 List 進行迴圈
-    # 這樣無論你的 JSON 是 [{}, {}] 還是 {"p1": {}, "p2": {}} 都能跑
-    if isinstance(platforms, dict):
-        platform_list = list(platforms.values())
-    elif isinstance(platforms, list):
-        platform_list = platforms
-    else:
-        print("Error: platforms.json format is not recognized (must be list or dict).")
-        return
-    # --- 修正重點結束 ---
+    # 攤平平台設定，解決 "Skipping invalid platform format" 錯誤
+    platform_list = flatten_platforms(raw_platforms)
+    print(f"ℹ️ Loaded {len(platform_list)} platforms to search.")
 
     # 迴圈遍歷每個產品
     for product in products:
@@ -78,36 +103,32 @@ def main():
         # 迴圈遍歷每個平台
         for platform_info in platform_list:
             
-            # --- 安全檢查 ---
-            # 確保 platform_info 是字典，如果它是 List (例如 ["Fortress", "..."])，這裡會跳過並警告
+            # 再次確認格式
             if not isinstance(platform_info, dict):
-                print(f"⚠️ Skipping invalid platform format (expected dict, got {type(platform_info).__name__}): {platform_info}")
                 continue
             
             domain = platform_info.get('domain')
             platform_name = platform_info.get('name')
             
             if not domain:
-                print(f"⚠️ Skipping platform with no domain: {platform_name}")
                 continue
 
             # 執行搜尋
             url = find_product_url(name, domain)
             
             if url:
-                # 成功搵到，加入結果
                 entry = {
                     "sku": sku,
                     "name": name,
                     "platform": platform_name,
-                    "type": platform_info.get('type'), # client or competitor
+                    "type": platform_info.get('type'),
                     "url": url,
                     "selector": platform_info.get('price_selector')
                 }
                 results.append(entry)
             
-            # 休息一下，避免被封鎖
-            time.sleep(random.uniform(2, 5))
+            # 隨機休息 3-6 秒 (HTML backend 比較慢，建議休息久一點點)
+            time.sleep(random.uniform(3, 6))
 
     # 儲存結果
     with open('generated_config.json', 'w', encoding='utf-8') as f:
