@@ -2,8 +2,6 @@ name: Run Google Search
 
 on:
   workflow_dispatch: # 容許你手動撳掣觸發
-  # schedule: # 如果想每日跑，可以解開呢行
-  #   - cron: '0 0 * * *'
 
 jobs:
   build:
@@ -20,8 +18,9 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # 下面這行是關鍵修改：安裝 duckduckgo-search 以及其他必要的套件
-          pip install duckduckgo-search requests beautifulsoup4
+          # 加了 -U (Upgrade) 確保安裝最新版，這通常能解決舊版報錯的問題
+          # 雖然 Log 叫你裝 ddgs，但在 PyPI 上標準名稱還是 duckduckgo-search
+          pip install -U duckduckgo-search requests beautifulsoup4 lxml
 
       - name: Run script
         run: python url_finder.py
