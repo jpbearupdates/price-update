@@ -23,4 +23,4 @@ jobs:
           pip install googlesearch-python
 
       - name: Run script
-        run: python your_script_name.py  # 改做你個 python 檔案名
+        run: python url_finder.py  # 改做你個 python 檔案名
