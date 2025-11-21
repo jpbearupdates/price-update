@@ -1,38 +1,44 @@
-name: Competitor Monitor
+name: Daily Price Monitor
 
+# 設定觸發條件
 on:
   schedule:
-    - cron: '0 */4 * * *' # 每 4 小時執行一次
-  workflow_dispatch: # 允許手動按鈕觸發
+    # 每 4 小時執行一次 (UTC 時間，對應香港時間約 +8)
+    - cron: '0 */4 * * *'
+  workflow_dispatch: # 允許手動點擊按鈕觸發
 
 permissions:
-  contents: write
+  contents: write # 允許 Action 修改並上傳檔案 (重要！)
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+    # 1. 下載你的代碼庫
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
+    # 2. 設定 Python 環境
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
 
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
+    # 3. 安裝依賴庫
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
 
-      - name: Run Scraper
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: python scraper.py
+    # 4. 執行爬蟲腳本
+    - name: Run Monitor Script
+      run: python monitor.py
 
-      - name: Commit and push changes
-        run: |
-          git config --global user.name 'GitHub Action'
-          git config --global user.email 'action@github.com'
-          git add data.json
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Update market data" && git push)
+    # 5. 將更新後的 dashboard_data.json 推送回倉庫
+    - name: Commit and push changes
+      run: |
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+        git add dashboard_data.json
+        # 只有當檔案有變動時才 Commit，避免報錯
+        git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update dashboard data" && git push)
